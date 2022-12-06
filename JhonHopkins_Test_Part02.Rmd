@@ -1,0 +1,102 @@
+---
+title: "Test: Jhon Hopkins"
+output: html_document
+date: "2022-12-06"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+```
+
+## Importing NYPD Shooting Incident Data
+
+Initially, we will import a series of CSV files containing information pertaining to both global and US COVID-19 cases and deaths. The files all contain similar information regarding date, country, state/province, and totals (cases/deaths.)
+
+The CSV files are also available for download [here](https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data/csse_covid_19_time_series).
+
+```{r setup_covid_data}
+url_in <- "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
+file_names <- c(
+                "time_series_covid19_confirmed_global.csv",
+                "time_series_covid19_deaths_global.csv",
+                "time_series_covid19_confirmed_US.csv",
+                "time_series_covid19_deaths_US.csv",
+                "time_series_covid19_recovered_global.csv")
+urls <- str_c(url_in, file_names)
+```
+
+## Including Plots
+
+After constructing the above URLs we then download the files of interest. In our analysis, we will mainly be considering the global cases as well as global deaths.
+
+```{r import_data, echo=FALSE}
+global_cases <- read_csv(urls[1])
+global_deaths <- read_csv(urls[2])
+US_cases <- read_csv(urls[3])
+US_deaths <- read_csv(urls[4])
+```
+
+## Tidy Data
+In order to tidy, the data we will start by loading in both global cases and the global deaths csv file. We then rename columns to more meaningful names Province/State and Country/Region befoe dropping data related to latitude and longitude.
+
+These intermediate datasets may be cleaned futther depending on required analysis.
+```{r tidy_data}
+global_cases <- global_cases %>%
+  pivot_longer(cols = -c(`Province/State`,
+                         `Country/Region`, Lat, Long),
+                      names_to = "date",
+                      values_to = "cases") %>%
+  select(-c(Lat,Long))
+
+
+global_deaths <- global_deaths %>%
+  pivot_longer(cols = -c(`Province/State`,
+                         `Country/Region`, Lat, Long),
+                      names_to = "date",
+                      values_to = "deaths") %>%
+  select(-c(Lat,Long))
+```
+
+## Visualization 1
+The first data visualization I wanted to consider was the overall trend of cases (red) vs deaths (blue). The results are scaled to log 10 and you can see as time has passed the curves have flattened.
+```{r global_deaths_cases}
+global_cases<- mutate(global_cases, date=mdy(date))
+global_cases_total <- global_cases %>%
+  group_by(day = floor_date(date, 'day')) %>%
+    summarize(total_cases = sum(cases))
+
+global_deaths <- mutate(global_deaths, date=mdy(date))
+global_deaths_total <- global_deaths %>%
+  group_by(day = floor_date(date, 'day')) %>%
+    summarize(total_deaths = sum(deaths))
+
+sp <- ggplot(global_cases_total, aes(x=day, total_cases))  + geom_point() +
+         geom_point(data = global_cases_total, aes(x = day, y = total_cases), colour = 'red', size = 3) +  geom_point(data = global_deaths_total, aes(x = day, y = total_deaths), colour = 'blue', size = 3)
+
+sp + scale_y_continuous(trans='log10')
+```
+
+## Visualization 2
+The second visualization considers examines the 20 countries with the most COVID deaths. What is interesting is that even though India has a lot of deaths from COVID it is still relatively few as compared to the USA.
+```{r global_deaths}
+global_cases_month_country <- global_cases %>%
+    group_by(`Country/Region`) %>%
+    summarize(total_cases = sum(cases))
+
+top_20 <- top_n(global_cases_month_country, 20, total_cases)
+
+ggplot(data=top_20, aes(x=`Country/Region`, y=total_cases)) + geom_bar(stat="identity") + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+## Conclusion and Bias Discussion
+
+In this work, there are several possible sources of bias. 
+
+1) Myself - When we recieved this task it is hard to deny that my bias towards the data was that there may be some expectation that countries with larger populations with face significantly more covid as the virus could spread more. Likewise, I expected poorer countries to fair far worse due to their lack of medical centres. I had to keep this in mind when conducting my analysis to avoid unconcouis bias.
+
+2) Data - As we did not participate in the collection of the data it is difficult to say how much bias is based in the reports; however, I think for this data it is important to keep in mind that this data would be self reported by individual countries and therefore, I do question the authenticity. Some countries may want to report lower numbers for a variety of reasons and/or countries may just count covid cases/deaths differently.
+
+3) Analysis - When analysis the data I tried my best to not to use the analysis to reinforce any bias I already may have. This was something that I continue to work on as I think we all go in with preconcived notions.
