@@ -13,9 +13,9 @@ library(lubridate)
 
 ## Importing NYPD Shooting Incident Data
 
-Initially, we will import a series of CSV files containing information pertaining to both global and US COVID-19 cases and deaths. The files all contain similar information regarding date, country, state/province, and totals (cases/deaths.)
+Initially, we will import a series of CSV files containing information pertaining to both global and US COVID-19 cases and deaths. The files all contain similar information regarding date, country/region, state/province, and totals (cases/deaths.)
 
-The CSV files are also available for download [here](https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data/csse_covid_19_time_series).
+The CSV files are also available for download from their Github repository  [here](https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data/csse_covid_19_time_series).
 
 ```{r setup_covid_data}
 url_in <- "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
@@ -28,11 +28,9 @@ file_names <- c(
 urls <- str_c(url_in, file_names)
 ```
 
-## Including Plots
-
 After constructing the above URLs we then download the files of interest. In our analysis, we will mainly be considering the global cases as well as global deaths.
 
-```{r import_data, echo=FALSE}
+```{r import_data}
 global_cases <- read_csv(urls[1])
 global_deaths <- read_csv(urls[2])
 US_cases <- read_csv(urls[3])
@@ -61,22 +59,22 @@ global_deaths <- global_deaths %>%
 ```
 
 ## Visualization 1
-The first data visualization I wanted to consider was the overall trend of cases (red) vs deaths (blue). The results are scaled to log 10 and you can see as time has passed the curves have flattened.
+The first data visualization I wanted to consider was the overall trend of global monthly cases (red) vs global monthly deaths (blue). The results are scaled to log 2 and you can see as time has passed the curves have flattened significantly
 ```{r global_deaths_cases}
 global_cases<- mutate(global_cases, date=mdy(date))
 global_cases_total <- global_cases %>%
-  group_by(day = floor_date(date, 'day')) %>%
+  group_by(month = floor_date(date, 'month')) %>%
     summarize(total_cases = sum(cases))
 
 global_deaths <- mutate(global_deaths, date=mdy(date))
 global_deaths_total <- global_deaths %>%
-  group_by(day = floor_date(date, 'day')) %>%
+  group_by(month = floor_date(date, 'month')) %>%
     summarize(total_deaths = sum(deaths))
 
-sp <- ggplot(global_cases_total, aes(x=day, total_cases))  + geom_point() +
-         geom_point(data = global_cases_total, aes(x = day, y = total_cases), colour = 'red', size = 3) +  geom_point(data = global_deaths_total, aes(x = day, y = total_deaths), colour = 'blue', size = 3)
+sp <- ggplot(global_cases_total, aes(x=month, total_cases))  + geom_point() +
+         geom_point(data = global_cases_total, aes(x = month, y = total_cases), colour = 'red', size = 3) +  geom_point(data = global_deaths_total, aes(x = month, y = total_deaths), colour = 'blue', size = 3)
 
-sp + scale_y_continuous(trans='log10')
+sp + scale_y_continuous(trans='log2')
 ```
 
 ## Visualization 2
@@ -89,6 +87,18 @@ global_cases_month_country <- global_cases %>%
 top_20 <- top_n(global_cases_month_country, 20, total_cases)
 
 ggplot(data=top_20, aes(x=`Country/Region`, y=total_cases)) + geom_bar(stat="identity") + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+## Linear Model
+In this linear model, I have mapped a linear trend to the total number of deaths globally per month. In my code, I had to create a new column month_since_start, which increments by 1 since the first month the data was recorded.
+```{r linear_model}
+month_since_start <- seq_len(nrow(global_deaths_total))
+cbind(month_since_start, global_deaths_total)
+
+mod <- lm(total_deaths~month_since_start, data=global_deaths_total)
+deaths_by_month_pred <- mutate(global_deaths_total, pred = predict(mod))
+deaths_by_month_pred%>% ggplot() + geom_point(aes(x= month_since_start, y = total_deaths), colour = 'red', size = 3) + geom_point(aes(x = month_since_start, y = pred), colour = 'blue', size = 2)
+
 ```
 
 ## Conclusion and Bias Discussion
